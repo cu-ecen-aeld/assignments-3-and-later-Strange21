@@ -9,15 +9,19 @@
 */
 bool do_system(const char *cmd)
 {
-
+    int result = system(cmd);
+    if (result == 0){
+        return true;
+    }
+    else{
+        return false;
+    }
 /*
  * TODO  add your code here
  *  Call the system() function with the command set in the cmd
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-
-    return true;
 }
 
 /**
@@ -49,6 +53,7 @@ bool do_exec(int count, ...)
     // and may be removed
     command[count] = command[count];
 
+    va_end(args);
 /*
  * TODO:
  *   Execute a system command by calling fork, execv(),
@@ -58,10 +63,40 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    pid_t pid = fork(); // Fork a new process
+    if (pid < 0) {
+        perror("fork");
+        return false; // Forking failed
+    }
 
-    va_end(args);
+    if (pid == 0) {
+        // Child process: execute the command
+        execv(command[0], command);
 
-    return true;
+        // If execv fails, print an error and exit
+        perror("execv");
+        exit(EXIT_FAILURE);
+    }
+
+    // Parent process: wait for the child process to complete
+    int status;
+    if (waitpid(pid, &status, 0) == -1) {
+        perror("waitpid");
+        return false;
+    }
+
+    // Check if the child process exited normally
+    if (WIFEXITED(status) ) {
+        if (WEXITSTATUS(status) == 0) {
+            return true; // Command executed successfully
+        } else {
+            printf("Command exited with non-zero status: %d\n", WEXITSTATUS(status));
+            return false;
+        }
+    } else {
+        printf("Command did not terminate normally.\n");
+        return false;
+    }
 }
 
 /**
@@ -94,6 +129,56 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 */
 
     va_end(args);
+
+    pid_t pid = fork(); // Fork a new process
+    if (pid < 0) {
+        perror("fork");
+        return false; // Forking failed
+    }
+
+    if (pid == 0) {
+        int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd < 0) {
+            perror("open");
+            exit(EXIT_FAILURE);
+        }
+
+        // Redirect stdout to the file
+        if (dup2(fd, STDOUT_FILENO) < 0) {
+            perror("dup2");
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
+
+        // Close the file descriptor (it's now duplicated to stdout)
+        close(fd);
+        // Child process: execute the command
+        execv(command[0], command);
+
+        // If execv fails, print an error and exit
+        perror("execv");
+        exit(EXIT_FAILURE);
+    }
+
+    // Parent process: wait for the child process to complete
+    int status;
+    if (waitpid(pid, &status, 0) == -1) {
+        perror("waitpid");
+        return false;
+    }
+
+    // Check if the child process exited normally
+    if (WIFEXITED(status) ) {
+        if (WEXITSTATUS(status) == 0) {
+            return true; // Command executed successfully
+        } else {
+            printf("Command exited with non-zero status: %d\n", WEXITSTATUS(status));
+            return false;
+        }
+    } else {
+        printf("Command did not terminate normally.\n");
+        return false;
+    }
 
     return true;
 }
